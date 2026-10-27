@@ -911,6 +911,9 @@
   .feedback-options { display:flex;flex-wrap:wrap;gap:10px;margin-top:14px; }
   .feedback-choice { background:transparent;border:1px solid rgba(126,179,255,.34);color:var(--mind);padding:12px 15px;font:12px 'DM Mono',monospace;cursor:pointer; }
   .feedback-choice:hover,.feedback-choice.selected { border-color:var(--synapse);background:rgba(45,106,255,.13); }
+  .feedback-form { display:grid;gap:10px;margin-top:16px; }
+  .feedback-form textarea { width:100%;min-height:110px;box-sizing:border-box;resize:vertical;border:1px solid rgba(126,179,255,.28);background:rgba(5,10,25,.72);color:var(--mind);padding:14px;font:13px/1.6 'DM Mono',monospace; }
+  .feedback-form textarea:focus { outline:1px solid var(--synapse); }
   @media(max-width:600px) { .mind-test {padding:72px 18px}.mind-test-shell{padding:24px 18px}.map-node{min-height:64px;padding:8px}.map-node-kicker{font-size:8px}.map-node-copy{font-size:12px}.map-center{width:62px;height:62px;font-size:15px}.map-insight{font-size:11px} }
   @media(max-width:600px) { .sound-btn { top:72px;right:12px;padding:9px 12px;font-size:9px; } }
 
@@ -1036,7 +1039,7 @@
   <div id="question-step">
    <p class="test-kicker">A first look at your mind map</p>
    <h2 class="test-heading">Start with what you wonder.</h2>
-   <p class="test-intro">Choose one answer for each question, or write your own. Your map will show the interest areas that surfaced in your answers. This preview stays in your browser; nothing is sent or saved.</p>
+   <p class="test-intro">Choose one answer for each question, or write your own. Your map shows the interest areas that surfaced in your answers. Your answers stay in this browser; only feedback you choose to submit is sent to the SYNAPSMOS team.</p>
    <div class="test-progress"><span id="question-count">Question 1 of 5</span><div class="test-dots" id="test-dots" aria-hidden="true"></div></div>
    <h3 class="test-question" id="test-question"></h3>
    <p class="answer-prompt">Choose one — or write your own below</p>
@@ -1052,7 +1055,7 @@
    <div class="map-preview" id="map-preview" aria-label="Your thinking constellation"></div>
    <p class="map-insight" id="map-insight" aria-live="polite">Interest areas emerging from your answers</p>
    <div class="interest-breakdown" id="interest-breakdown" aria-label="Interest percentages"></div>
-   <div class="test-feedback"><p class="test-kicker">Would this be useful to you?</p><div class="feedback-options" role="group" aria-label="Your first reaction"><button class="feedback-choice" data-reaction="yes">I’d try this</button><button class="feedback-choice" data-reaction="maybe">Maybe, with the right people</button><button class="feedback-choice" data-reaction="no">Not for me</button></div><p class="test-note" id="feedback-note" aria-live="polite" style="margin-top:14px;letter-spacing:.04em;text-transform:none"></p><button class="test-skip" id="download-feedback" hidden style="margin-top:8px">Download this anonymous response</button></div>
+   <div class="test-feedback"><p class="test-kicker">Would this be useful to you?</p><div class="feedback-options" role="group" aria-label="Your first reaction"><button class="feedback-choice" type="button" data-reaction="yes">I’d try this</button><button class="feedback-choice" type="button" data-reaction="maybe">Maybe, with the right people</button><button class="feedback-choice" type="button" data-reaction="no">Not for me</button></div><form class="feedback-form" id="feedback-form"><label class="answer-prompt" for="feedback-message">What should we improve, or what would make you want to connect?</label><textarea id="feedback-message" name="message" maxlength="2000" placeholder="Share your honest thoughts…" required></textarea><label class="waitlist-honeypot" aria-hidden="true">Leave this field empty<input name="website" tabindex="-1" autocomplete="off"></label><p class="test-note" id="feedback-note" aria-live="polite" style="letter-spacing:.04em;text-transform:none">Your feedback is sent to the SYNAPSMOS team. Please don’t include private or sensitive information.</p><button class="test-next" id="feedback-submit" type="submit">Send feedback</button></form></div>
    <button class="test-skip" id="restart-test" style="margin-top:24px">Start over</button>
   </div>
  </div>
@@ -1986,26 +1989,55 @@ document.getElementById('restart-test').addEventListener('click', () => {
   questionStep.hidden = false;
   document.querySelectorAll('.feedback-choice').forEach(button => button.classList.remove('selected'));
   document.getElementById('download-feedback').hidden = true;
-  document.getElementById('feedback-note').textContent = '';
+  document.getElementById('feedback-note').textContent = 'Your feedback is sent to the SYNAPSMOS team. Please don’t include private or sensitive information.';
+  document.getElementById('feedback-message').value = '';
   renderQuestion();
   document.getElementById('mind-test').scrollIntoView({ behavior: 'smooth' });
 });
 document.querySelectorAll('.feedback-choice').forEach(button => button.addEventListener('click', () => {
   document.querySelectorAll('.feedback-choice').forEach(item => item.classList.toggle('selected', item === button));
-  document.getElementById('feedback-note').textContent = 'Your answer stays here. Download it to share it with the team; this demo does not send responses.';
-  document.getElementById('download-feedback').hidden = false;
+  document.getElementById('feedback-note').textContent = 'Saving your anonymous reaction…';
+  saveReaction(button.dataset.reaction);
   if (button.dataset.reaction === 'yes') showSignupGate('interest');
 }));
-document.getElementById('download-feedback').addEventListener('click', () => {
+const reactionSessionToken = (() => {
+  try {
+    let token = sessionStorage.getItem('synapsmos-reaction-session');
+    if (!token) { token = crypto.randomUUID(); sessionStorage.setItem('synapsmos-reaction-session', token); }
+    return token;
+  } catch { return crypto.randomUUID(); }
+})();
+async function saveReaction(reaction) {
+  const status = document.getElementById('feedback-note');
+  try {
+    const response = await fetch('/api/reaction', { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({ reaction, sessionToken: reactionSessionToken }) });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Reaction could not be saved.');
+    status.textContent = 'Thanks — your anonymous reaction is recorded. Change your choice anytime during this visit.';
+  } catch {
+    status.textContent = 'Your reaction could not be saved right now. Please try again later.';
+  }
+}
+document.getElementById('feedback-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = document.getElementById('feedback-submit');
+  const status = document.getElementById('feedback-note');
   const selected = document.querySelector('.feedback-choice.selected');
-  if (!selected) return;
-  const report = { product: 'SYNAPSMOS concept test', reaction: selected.dataset.reaction, capturedAt: new Date().toISOString() };
-  const url = URL.createObjectURL(new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' }));
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = 'synapsmos-feedback.json';
-  link.click();
-  URL.revokeObjectURL(url);
+  button.disabled = true;
+  button.textContent = 'Sending…';
+  try {
+    const response = await fetch('/api/feedback', { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({ message: form.elements.message.value, reaction: selected?.dataset.reaction || null, website: form.elements.website.value }) });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Feedback could not be sent. Please try again.');
+    status.textContent = 'Thank you — your feedback has been sent to the SYNAPSMOS team.';
+    form.elements.message.value = '';
+  } catch (error) {
+    status.textContent = error.message || 'Could not send feedback. Please try again later.';
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Send feedback';
+  }
 });
 renderQuestion();
 setTimeout(() => {
