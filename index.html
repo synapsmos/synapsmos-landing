@@ -289,6 +289,8 @@
   .waitlist-demo-count { margin: 22px 0; padding: 16px; border: 1px solid rgba(45,106,255,0.28); font: 13px 'DM Mono', monospace; }
   .waitlist-demo-count strong { display:block; color: var(--gold); font: 34px 'Cormorant Garamond', Georgia, serif; }
   .waitlist-demo-count small { display:block; margin-top:7px; color: rgba(200,222,255,0.46); }
+  .waitlist-progress { height:5px; margin-top:15px; overflow:hidden; background:rgba(100,125,190,0.2); }
+  .waitlist-progress span { display:block; width:0; height:100%; background:linear-gradient(90deg,var(--synapse),var(--glow)); transition:width .5s ease; }
   .waitlist-signup-form { display:grid; gap:12px; margin-top:18px; }
   .waitlist-email { width:100%; box-sizing:border-box; border:1px solid rgba(45,106,255,0.38); background:rgba(10,22,40,0.8); color:var(--conscious); padding:14px 16px; font:14px 'DM Mono',monospace; }
   .waitlist-consent { display:flex; gap:10px; align-items:flex-start; color:rgba(200,222,255,0.62); font:12px/1.6 'DM Mono',monospace; }
@@ -1011,7 +1013,8 @@
  <h2 id="waitlist-title">Be part of the first circle.</h2>
  <p>We’re exploring a calmer way to meet people through ideas and shared interests.</p>
  <div class="waitlist-demo-count"><strong id="waitlist-count-number">—</strong>people on the early access list
-  <small id="waitlist-count-caption">Loading the current count…</small>
+  <div class="waitlist-progress" role="progressbar" aria-label="Progress toward the founding-member goal" aria-valuemin="0" aria-valuemax="500" aria-valuenow="0"><span id="waitlist-progress-fill"></span></div>
+  <small id="waitlist-count-caption">Real sign-ups toward our goal of 500 founding members · loading count…</small>
  </div>
  <form class="waitlist-signup-form" id="waitlist-form">
   <label class="test-kicker" for="waitlist-email">Your email</label>
@@ -1914,11 +1917,14 @@ async function refreshWaitlistCount() {
     const response = await fetch('/api/waitlist', { headers: { Accept: 'application/json' } });
     if (!response.ok) throw new Error('Count unavailable');
     const data = await response.json();
-    document.getElementById('waitlist-count-number').textContent = new Intl.NumberFormat().format(data.count);
-    document.getElementById('waitlist-count-caption').textContent = 'Real sign-ups · updated when opened';
+    const count = Number.isFinite(data.count) ? Math.max(0, data.count) : 0;
+    document.getElementById('waitlist-count-number').textContent = new Intl.NumberFormat().format(count);
+    document.getElementById('waitlist-count-caption').textContent = `Real sign-ups toward our goal of 500 founding members · updated when opened`;
+    document.querySelector('.waitlist-progress').setAttribute('aria-valuenow', String(Math.min(count, 500)));
+    document.getElementById('waitlist-progress-fill').style.width = `${Math.min(count / 500 * 100, 100)}%`;
   } catch {
     document.getElementById('waitlist-count-number').textContent = '—';
-    document.getElementById('waitlist-count-caption').textContent = 'The current count is temporarily unavailable.';
+    document.getElementById('waitlist-count-caption').textContent = 'Launch goal: 500 founding members · the real signup count is temporarily unavailable.';
   }
 }
 document.getElementById('waitlist-later').addEventListener('click', () => document.getElementById('waitlist-dialog').close());
