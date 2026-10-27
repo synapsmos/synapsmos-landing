@@ -289,6 +289,11 @@
   .waitlist-demo-count { margin: 22px 0; padding: 16px; border: 1px solid rgba(45,106,255,0.28); font: 13px 'DM Mono', monospace; }
   .waitlist-demo-count strong { display:block; color: var(--gold); font: 34px 'Cormorant Garamond', Georgia, serif; }
   .waitlist-demo-count small { display:block; margin-top:7px; color: rgba(200,222,255,0.46); }
+  .waitlist-signup-form { display:grid; gap:12px; margin-top:18px; }
+  .waitlist-email { width:100%; box-sizing:border-box; border:1px solid rgba(45,106,255,0.38); background:rgba(10,22,40,0.8); color:var(--conscious); padding:14px 16px; font:14px 'DM Mono',monospace; }
+  .waitlist-consent { display:flex; gap:10px; align-items:flex-start; color:rgba(200,222,255,0.62); font:12px/1.6 'DM Mono',monospace; }
+  .waitlist-consent input { margin-top:4px; accent-color:var(--synapse); }
+  .waitlist-honeypot { position:absolute!important;left:-10000px!important;width:1px!important;height:1px!important;overflow:hidden!important; }
   .waitlist-dialog-actions { display:flex; gap:12px; flex-wrap:wrap; margin-top:22px; }
   .waitlist-dialog-actions button { cursor:pointer; }
 
@@ -1005,14 +1010,20 @@
  <p class="test-kicker">SYNAPSMOS · Early access</p>
  <h2 id="waitlist-title">Be part of the first circle.</h2>
  <p>We’re exploring a calmer way to meet people through ideas and shared interests.</p>
- <div class="waitlist-demo-count"><strong>248</strong>people on the early access list
-  <small>Illustrative demo count only — not real registrations.</small>
+ <div class="waitlist-demo-count"><strong id="waitlist-count-number">—</strong>people on the early access list
+  <small id="waitlist-count-caption">Loading the current count…</small>
  </div>
- <p id="waitlist-status" role="status" aria-live="polite">Join the waitlist to signal that you’d like early access.</p>
- <div class="waitlist-dialog-actions">
-  <button class="test-next" id="waitlist-join" type="button">I’d like early access</button>
-  <form method="dialog"><button class="share-close" type="submit">Maybe later</button></form>
- </div>
+ <form class="waitlist-signup-form" id="waitlist-form">
+  <label class="test-kicker" for="waitlist-email">Your email</label>
+  <input class="waitlist-email" id="waitlist-email" name="email" type="email" autocomplete="email" maxlength="254" placeholder="you@example.com" required>
+  <label class="waitlist-consent"><input id="waitlist-consent" type="checkbox" required><span>I agree that SYNAPSMOS may use my email to contact me about early access. My mind-map answers are not included.</span></label>
+  <label class="waitlist-honeypot" aria-hidden="true">Leave this field empty<input name="website" tabindex="-1" autocomplete="off"></label>
+  <p id="waitlist-status" role="status" aria-live="polite">Join the list to hear about SYNAPSMOS early access.</p>
+  <div class="waitlist-dialog-actions">
+   <button class="test-next" id="waitlist-join" type="submit">Join the waitlist</button>
+   <button class="share-close" id="waitlist-later" type="button">Maybe later</button>
+  </div>
+ </form>
 </dialog>
 
 <!-- INTERACTIVE CONCEPT TEST -->
@@ -1896,9 +1907,46 @@ document.getElementById('share-map').addEventListener('click', () => showSignupG
 document.getElementById('open-waitlist').addEventListener('click', () => {
   document.getElementById('waitlist-status').textContent = 'Join the waitlist to signal that you’d like early access.';
   document.getElementById('waitlist-dialog').showModal();
+  refreshWaitlistCount();
 });
-document.getElementById('waitlist-join').addEventListener('click', () => {
-  document.getElementById('waitlist-status').textContent = 'Thanks for your interest. Waitlist sign-up is not connected in this preview, so no account or registration was recorded.';
+async function refreshWaitlistCount() {
+  try {
+    const response = await fetch('/api/waitlist', { headers: { Accept: 'application/json' } });
+    if (!response.ok) throw new Error('Count unavailable');
+    const data = await response.json();
+    document.getElementById('waitlist-count-number').textContent = new Intl.NumberFormat().format(data.count);
+    document.getElementById('waitlist-count-caption').textContent = 'Real sign-ups · updated when opened';
+  } catch {
+    document.getElementById('waitlist-count-number').textContent = '—';
+    document.getElementById('waitlist-count-caption').textContent = 'The current count is temporarily unavailable.';
+  }
+}
+document.getElementById('waitlist-later').addEventListener('click', () => document.getElementById('waitlist-dialog').close());
+document.getElementById('waitlist-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const submit = document.getElementById('waitlist-join');
+  const status = document.getElementById('waitlist-status');
+  submit.disabled = true;
+  submit.textContent = 'Joining…';
+  status.textContent = 'Adding your email to the early-access list…';
+  try {
+    const response = await fetch('/api/waitlist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ email: form.elements.email.value, consent: document.getElementById('waitlist-consent').checked, website: form.elements.website.value })
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Could not join the list. Please try again.');
+    status.textContent = result.alreadyJoined ? 'You’re already on the list. Thanks for your interest!' : 'You’re on the list. Thanks for being interested in SYNAPSMOS!';
+    form.reset();
+    refreshWaitlistCount();
+  } catch (error) {
+    status.textContent = error.message || 'We could not save your sign-up. Please try again.';
+  } finally {
+    submit.disabled = false;
+    submit.textContent = 'Join the waitlist';
+  }
 });
 document.getElementById('preview-profile').addEventListener('click', () => document.getElementById('profile-preview').showModal());
 document.getElementById('request-connection').addEventListener('click', () => {
