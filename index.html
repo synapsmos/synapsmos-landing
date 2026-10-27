@@ -1910,11 +1910,12 @@ function showSignupGate(reason) {
 }
 
 document.getElementById('share-map').addEventListener('click', () => showSignupGate('share'));
-document.getElementById('open-waitlist').addEventListener('click', () => {
+function openWaitlistDialog() {
   document.getElementById('waitlist-status').textContent = 'Join the waitlist to signal that you’d like early access.';
   document.getElementById('waitlist-dialog').showModal();
   refreshWaitlistCount();
-});
+}
+document.getElementById('open-waitlist').addEventListener('click', openWaitlistDialog);
 async function refreshWaitlistCount() {
   try {
     const response = await fetch('/api/waitlist', { headers: { Accept: 'application/json' } });
@@ -1998,7 +1999,7 @@ document.querySelectorAll('.feedback-choice').forEach(button => button.addEventL
   document.querySelectorAll('.feedback-choice').forEach(item => item.classList.toggle('selected', item === button));
   document.getElementById('feedback-note').textContent = 'Saving your anonymous reaction…';
   saveReaction(button.dataset.reaction);
-  if (button.dataset.reaction === 'yes') showSignupGate('interest');
+  if (button.dataset.reaction === 'yes') openWaitlistDialog();
 }));
 const reactionSessionToken = (() => {
   try {
